@@ -35,24 +35,17 @@ pipeline {
         stage('Start/Stop Service') {
             steps {
                 script {
-                    def packageStatus = sh(
-                        script: "sudo systemctl is-active ${params.packageName}", 
-                        returnStdout: true
-                        ).trim()
-                
                     if (params.serviceAction == 'start') {
-                        if (packageStatus == 'active') {
+                        if (sh(script: "sudo systemctl status ${params.packageName} | grep 'Active: active'", returnStatus: true) == 0) {
                             echo "${params.packageName} is already running"
-                        }
-                        else {
+                        } else {
                             sh "sudo systemctl start ${params.packageName}"
                             echo "Started ${params.packageName} service"
                         }
                     } else if (params.serviceAction == 'stop') {
-                        if (packageStatus == 'inactive') {
+                        if (sh(script: "sudo systemctl status ${params.packageName} | grep 'Active: inactive'", returnStatus: true) == 0) {
                             echo "${params.packageName} is already stopped"
-                        }
-                        else {
+                        } else {
                             sh "sudo systemctl stop ${params.packageName}"
                             echo "Stopped ${params.packageName} service"
                         }
