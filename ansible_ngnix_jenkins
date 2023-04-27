@@ -1,0 +1,29 @@
+pipeline {
+    agent {
+        label 'masternodes'
+    }
+    stages {
+        stage('Install Ansible') {
+            steps {
+                script {
+                    def installed = sh(
+                        returnStatus: true, 
+                        script: "dpkg -s ansible | grep 'Status: install ok installed'"
+                        )
+                    if (installed == 0) {
+                        echo "Ansible is already installed"
+                    } else {
+                        sh "sudo apt update"
+                        sh "sudo apt install ansible -y"
+                        echo "Ansible is installed successfully"
+                    }
+                }
+            }
+        }
+        stage('Run Ansible playbook to Install Ngnix and Jenkins') {
+            steps {
+                sh 'ansible-playbook jenkins_nginx_install.yml'
+            }
+        }
+    }
+}
