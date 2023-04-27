@@ -5,15 +5,22 @@ pipeline {
     
     environment {
         packageName = 'ansible'
+        GitHub-Token = credentials('ansible_ngnix_jenkins_github_token')
     }
     
-    stages {
+    stages {        
         stage('Git Clone') {
-            steps {
-                git 'https://github.com/premashish-ds/install_and_service_status.git'
-            }
-        }
-            
+          steps {
+            clone([
+              $class: 'GitSCM',
+              branches: [[name: '*/main']],
+              userRemoteConfigs: [[
+                url: 'https://github.com/premashish-ds/install_and_service_status.git',
+                credentialsId: GitHub-Token
+              ]]
+            ])
+          }
+        }            
         stage('Ansible Installation') {
             steps {
                 script {
