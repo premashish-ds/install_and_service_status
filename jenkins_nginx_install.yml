@@ -2,7 +2,7 @@
   hosts: nodes
   become: true
   vars:
-    nginx_server_name: "jenkins.example.com"
+    nginx_server_name: "192.168.0.102"
     jenkins_port: 8080
   tasks:
     - name: Install Nginx on Ubuntu
@@ -35,11 +35,11 @@
         name: nginx
         state: restarted
 
-- name: Enable Nginx and Jenkins services
-  service:
-    name: "{{ item }}"
-    enabled: true
-    state: started
-  loop:
-    - nginx
-    - jenkins
+    - name: Enable Nginx and Jenkins services
+      service:
+        name: "{{ item }}"
+        enabled: true
+        state: started
+      loop:
+        - nginx
+        - jenkins
