@@ -5,7 +5,7 @@ pipeline {
     
     environment {
         packageName = 'ansible'
-        GitHub-Token = credentials('ansible_ngnix_jenkins_github_token')
+        GitHub-Token = credentials('github-token')
     }
     
     stages {        
