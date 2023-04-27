@@ -1,0 +1,29 @@
+- name: Install Nginx and Jenkins
+  hosts: servers
+  become: true
+  vars:
+    nginx_server_name: "jenkins.example.com"
+    jenkins_port: 8080
+  tasks:
+    - name: Install Nginx
+      apt:
+        name: nginx
+        state: present
+
+    - name: Configure Nginx
+      template:
+        src: nginx.conf.j2
+        dest: /etc/nginx/nginx.conf
+      notify:
+        - Restart Nginx
+
+    - name: Install Jenkins
+      apt:
+        name: jenkins
+        state: present
+
+  handlers:
+    - name: Restart Nginx
+      service:
+        name: nginx
+        state: restarted
