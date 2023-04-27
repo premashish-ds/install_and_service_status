@@ -1,28 +1,39 @@
 pipeline {
     agent {
-        label 'masternodes'
+        label 'node2'
     }
+    
+    environment {
+        packageName = 'ansible'
+    }
+    
     stages {
-        stage('Install Ansible') {
+        stage('Git Clone') {
+            steps {
+                git 'https://github.com/premashish-ds/install_and_service_status.git'
+            }
+        }
+            
+        stage('Ansible Installation') {
             steps {
                 script {
                     def installed = sh(
                         returnStatus: true, 
-                        script: "dpkg -s ansible | grep 'Status: install ok installed'"
+                        script: "dpkg -s ${packageName} | grep 'Status: install ok installed'"
                         )
                     if (installed == 0) {
-                        echo "Ansible is already installed"
+                        echo "${packageName} is already installed"
                     } else {
                         sh "sudo apt update"
-                        sh "sudo apt install ansible -y"
-                        echo "Ansible is installed successfully"
+                        sh "sudo apt install ${packageName} -y"
+                        echo "${packageName} is installed successfully"
                     }
                 }
             }
         }
         stage('Run Ansible playbook to Install Ngnix and Jenkins') {
             steps {
-                sh 'ansible-playbook jenkins_nginx_install.yml'
+                sh 'ansible-playbook -i inventory.ini jenkins_nginx_install.yml'
             }
         }
     }
