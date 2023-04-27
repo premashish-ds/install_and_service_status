@@ -1,5 +1,5 @@
 - name: Install Nginx and Jenkins
-  hosts: servers
+  hosts: nodes
   become: true
   vars:
     nginx_server_name: "jenkins.example.com"
