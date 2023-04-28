@@ -2,7 +2,7 @@
   hosts: nodes
   become: true
   vars:
-    nginx_server_name: "192.168.0.102"
+    nginx_server_name: "192.168.0.104"
     jenkins_port: 8080
   tasks:
     - name: Install Nginx on Ubuntu
