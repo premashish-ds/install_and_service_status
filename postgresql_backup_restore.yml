@@ -151,6 +151,58 @@
       debug:
         var: query_result
 
+
+
+
+---
+- hosts: all
+  become: yes
+  vars:
+    pg_username: postgres
+    pg_password: postgres
+    pg_source_host: node1@192.168.0.103
+    pg_source_db: source_database
+    pg_dest_host: node2@192.168.0.104
+    pg_dest_db: destination_database
+    pg_backup_file: "{{ 'backup_file-' ~ ansible_date_time.date ~ '-' ~ ansible_date_time.hour ~ ansible_date_time.minute ~ '.gz' }}"
+      #    ansible_python_interpreter: /usr/bin/python3
+
+  tasks:
+    - name: Create PostgreSQL database backup
+      shell: "pg_dump -U {{ pg_username }} -h {{ pg_source_host }} {{ pg_source_db }} | gzip > /tmp/{{ pg_backup_file }}"
+
+    - name: Set permissions on backup file
+      file:
+        path: "/tmp/{{ pg_backup_file }}"
+        owner: "{{ pg_username }}"
+        group: "{{ pg_username }}"
+        mode: '0600'
+
+    - name: Copy PostgreSQL database backup to destination
+      copy:
+        src: "/tmp/{{ pg_backup_file }}"
+        dest: "/tmp/{{ pg_backup_file }}"
+        remote_src: yes
+
+    - name: Unzip PostgreSQL database backup
+      command: "gunzip /tmp/{{ pg_backup_file }}"
+
+    - name: Restore PostgreSQL database backup
+      #      command: "psql -U {{ pg_username }} -h {{ pg_dest_host }} {{ pg_dest_db }} < /tmp/{{ pg_backup_file | replace('.gz', '') }}"
+      command: "pg_restore -U {{ pg_username }} -h {{ pg_dest_host }} -d {{ pg_dest_db }} /tmp/{{ pg_backup_file | replace('.gz', '') }}"
+
+    - name: Verify PostgreSQL database restore
+      postgresql_query:
+        db: "{{ pg_dest_db }}"
+        user: "{{ pg_username }}"
+        login_host: "{{ pg_dest_host }}"
+        login_password: "{{ pg_password }}"
+        query: "SELECT count(*) FROM pg_tables;"
+      register: query_result
+
+    - name: Print query result
+      debug:
+        var: query_result
       
       
  
