@@ -1,8 +1,7 @@
 ---
 - name: Backup and restore PostgreSQL database
+  hosts: all
   vars:
-    source_host_grp: source
-    destination_host_grp: destination
     db_name: postgresql
     db_user: user
     backup_file: "{{ db_name }}.dump"
@@ -11,43 +10,147 @@
 
   tasks:
     - name: Ensure backup directory exists
-      hosts: "{{ source_host_grp }}"
       file:
         path: "{{ backup_dir }}"
         state: directory
         mode: 0700
+      delegate_to: source_instance
 
     - name: Create backup on source server
-      hosts: "{{ source_host_grp }}"
       command: pg_dump -U {{ db_user }} -Fc {{ db_name }} > "{{ backup_path }}"
       args:
         chdir: "{{ backup_dir }}"
       register: backup_result
+      delegate_to: source_instance
 
     - name: Copy backup to destination server
-      hosts: "{{ destination_host_grp }}"
       copy:
         src: "{{ backup_path }}"
         dest: "{{ backup_path }}"
+      delegate_to: destination_instance
 
     - name: Ensure database is created on destination server
-      hosts: "{{ destination_host_grp }}"
       postgresql_db:
         name: "{{ db_name }}"
         state: present
       become: true
+      delegate_to: destination_instance
 
     - name: Drop all connections to destination database
-      hosts: "{{ destination_host_grp }}"
       postgresql_query:
         db: "{{ db_name }}"
         login_user: "{{ db_user }}"
         query: "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{{ db_name }}'"
       become: true
+      delegate_to: destination_instance
 
     - name: Restore backup on destination server
-      hosts: "{{ destination_host_grp }}"
       command: pg_restore -U {{ db_user }} -Fc -d {{ db_name }} "{{ backup_path }}"
       args:
         chdir: "{{ backup_dir }}"
       become: true
+      delegate_to: destination_instance
+      
+      
+---
+- name: PostgreSQL Backup and Restore
+  hosts:
+    - source
+    - destination
+  vars:
+    source_db_name: database_pg
+    destination_db_name: database_pg_dest
+    backup_path: /tmp/postgres_backup.sql
+    restore_path: /tmp/postgres_backup.sql
+    pg_user: user1
+    pg_password: userpass
+  tasks:
+    - name: Take a backup of the source database
+      become: yes
+      shell: pg_dump -U {{ pg_user }} {{ source_db_name }} > {{ backup_path }}
+    - name: Transfer backup file to destination server
+      become: yes
+      copy:
+        src: "{{ backup_path }}"
+        dest: "{{ backup_path }}"
+        remote_src: yes
+        mode: '0600'
+        owner: postgres
+        group: postgres
+      delegate_to: "{{ groups['destination'][0] }}"
+    - name: Restore backup on destination server
+      become: yes
+      shell: psql -U {{ pg_user }} -d {{ destination_db_name }} -f {{ restore_path }}
+      delegate_to: "{{ groups['destination'][0] }}"
+      
+      
+      
+ ---
+- hosts: all
+  become: yes
+  vars:
+    pg_username: postgres
+    pg_source_host: node1@192.168.0.103
+    pg_source_db: source_database
+    pg_dest_host: node2@192.168.0.104
+    pg_dest_db: destination_database
+    pg_backup_file: backup_file.gz
+    ansible_python_interpreter: /usr/bin/python3
+
+  tasks:
+    - name: Create PostgreSQL database backup
+      shell: "pg_dump -U {{ pg_username }} -h {{ pg_source_host }} {{ pg_source_db }} | gzip > /tmp/{{ pg_backup_file }}"
+
+    - name: Copy PostgreSQL database backup to destination
+      copy:
+        src: "/tmp/{{ pg_backup_file }}"
+        dest: "/tmp/{{ pg_backup_file }}"
+        remote_src: yes
+
+    - name: Unzip PostgreSQL database backup
+      command: "gunzip /tmp/{{ pg_backup_file }}"
+
+ /*
+
+    - name: Install psycopg2 for Python 3
+      become: true
+      apt:
+        name: python3-psycopg2
+        state: present
+      when: "'psycopg2' not in ansible_python_interpreter|lower"
+
+    - name: Install psycopg2 for Python 2
+      become: true
+      apt:
+        name: python-psycopg2
+        state: present
+      when: "'psycopg2' not in ansible_python_interpreter|lower"
+
+    - name: Create PostgreSQL database on destination
+      postgresql_db:
+        name: "{{ pg_dest_db }}"
+        state: present
+        login_host: "{{ pg_dest_host }}"
+        login_user: "{{ pg_username }}"
+        login_password: "password"
+*/
+
+    - name: Restore PostgreSQL database backup
+      command: "psql -U {{ pg_username }} -h {{ pg_dest_host }} {{ pg_dest_db }} < /tmp/{{ pg_backup_file | replace('.gz', '') }}"
+
+    - name: Verify PostgreSQL database restore
+      postgresql_query:
+        db: "{{ pg_dest_db }}"
+        user: "{{ pg_username }}"
+        login_host: "{{ pg_dest_host }}"
+        login_password: "password"
+        query: "SELECT count(*) FROM pg_tables;"
+      register: query_result
+
+    - name: Print query result
+      debug:
+        var: query_result
+
+      
+      
+ 
