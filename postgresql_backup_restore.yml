@@ -1,21 +1,53 @@
 ---
-- hosts: jenkins@192.168.0.102
-    vars:
+- name: Backup and restore PostgreSQL database
+  vars:
+    source_host_grp: source
+    destination_host_grp: destination
     db_name: postgresql
-    db_backup: postgresql_backup.sql
+    db_user: user
+    backup_file: "{{ db_name }}.dump"
+    backup_dir: "/tmp/pg-backup"
+    backup_path: "{{ backup_dir }}/{{ backup_file }}"
 
   tasks:
-    - name: Create backup of PostgreSQL database
-      become: true
-      command: pg_dump {{ db_name }} > {{ db_backup }}
+    - name: Ensure backup directory exists
+      hosts: "{{ source_host_grp }}"
+      file:
+        path: "{{ backup_dir }}"
+        state: directory
+        mode: 0700
 
-- hosts: node1@192.162.0.103
-  tasks:
-    - name: Copy backup file from source to destination
-      become: true
+    - name: Create backup on source server
+      hosts: "{{ source_host_grp }}"
+      command: pg_dump -U {{ db_user }} -Fc {{ db_name }} > "{{ backup_path }}"
+      args:
+        chdir: "{{ backup_dir }}"
+      register: backup_result
+
+    - name: Copy backup to destination server
+      hosts: "{{ destination_host_grp }}"
       copy:
-        src: /etc/ansible/{{ db_backup }}
-        dest: /tmp/{{ db_backup }}
-    - name: Restore backup to PostgreSQL database
+        src: "{{ backup_path }}"
+        dest: "{{ backup_path }}"
+
+    - name: Ensure database is created on destination server
+      hosts: "{{ destination_host_grp }}"
+      postgresql_db:
+        name: "{{ db_name }}"
+        state: present
       become: true
-      command: psql {{ db_name }} < /tmp/{{ db_backup }}
+
+    - name: Drop all connections to destination database
+      hosts: "{{ destination_host_grp }}"
+      postgresql_query:
+        db: "{{ db_name }}"
+        login_user: "{{ db_user }}"
+        query: "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{{ db_name }}'"
+      become: true
+
+    - name: Restore backup on destination server
+      hosts: "{{ destination_host_grp }}"
+      command: pg_restore -U {{ db_user }} -Fc -d {{ db_name }} "{{ backup_path }}"
+      args:
+        chdir: "{{ backup_dir }}"
+      become: true
