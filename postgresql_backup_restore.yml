@@ -206,3 +206,50 @@
       
       
  
+--------------------
+---
+- hosts:
+    - source_instance
+    - destination_instance
+
+  vars:
+    pg_username: postgres
+    pg_password: postgres
+    pg_source_db: source_pg_db
+    pg_backup_file: backup_file-{{ ansible_date_time.date }}-{{ ansible_date_time.hour }}{{ ansible_date_time.minute }}
+    pg_dest_db: destination_pg_db
+
+  tasks:
+    - name: Take PostgreSQL backup from source instance
+      become: true
+      shell: "pg_dump -U {{ pg_username }} -h {{ ansible_host }} {{ pg_source_db }} | gzip > /tmp/{{ pg_backup_file }}"
+      register: pg_backup_result
+      when: inventory_hostname == 'source_instance'
+
+    - name: Install psql on destination instance
+      become: true
+      apt:
+        name: postgresql-client
+        state: present
+      when: inventory_hostname == 'destination_instance'
+
+    - name: Copy PostgreSQL backup file to destination instance
+      become: true
+      copy:
+        src: "/tmp/{{ pg_backup_file }}"
+        dest: "/tmp/{{ pg_backup_file }}"
+        remote_src: true
+      when: inventory_hostname == 'destination_instance'
+      delegate_to: source_instance
+
+    - name: Restore PostgreSQL backup to destination instance
+      become: true
+      shell: "gunzip -c /tmp/{{ pg_backup_file }} | psql -U {{ pg_username }} -h {{ ansible_host }} -d {{ pg_dest_db }}"
+      when: inventory_hostname == 'destination_instance'
+      vars:
+        restore_file: /tmp/{{ pg_backup_file }}
+
+    - name: Display PostgreSQL backup result
+      debug:
+        var: pg_backup_result
+      when: inventory_hostname == 'source_instance'
